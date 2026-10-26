@@ -156,7 +156,8 @@ test("FCM route returns provider error codes without exposing registration token
 test("frontend recovery shows request failures and the correct API target", async () => {
   const frontend = await readFile(new URL("../src/pages/WebDashboard.tsx", import.meta.url), "utf8");
   const recovery = frontend.slice(frontend.indexOf("/* ── Send Backend URL"), frontend.indexOf("/* ── Licence Countdown"));
-  assert.match(recovery, /https:\/\/recovery2-robot\.pages\.dev\/api/);
+  assert.ok(recovery.includes('const BACKEND_URL = `${window.location.origin}/api`;'));
+  assert.doesNotMatch(recovery, /https:\/\/recovery5-7f2\.pages\.dev\/api/);
   assert.doesNotMatch(recovery, /mr-recovery-api-502z|if \(!r\.ok\) break|catch \{ \/\* ignore \*\/ \}|devices recovered|✅ Recovery Complete/);
   assert.match(recovery, /setSendUrlState\("err"\)/);
   assert.match(recovery, /role="alert"/);
