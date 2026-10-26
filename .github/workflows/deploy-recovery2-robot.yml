@@ -8,6 +8,11 @@ on:
         required: false
         default: false
         type: boolean
+      deploy_event_bus:
+        description: "Deploy the separate EventBus Worker"
+        required: false
+        default: true
+        type: boolean
 
 concurrency:
   group: recovery2-robot-production
@@ -86,6 +91,7 @@ jobs:
           check_present "New Worker recovery2-robot-event-bus" "$base/workers/scripts/recovery2-robot-event-bus"
 
       - name: Deploy isolated EventBus Worker
+        if: ${{ inputs.deploy_event_bus }}
         working-directory: artifacts/event-bus-worker
         run: npx --yes wrangler@3 deploy --name recovery2-robot-event-bus
         env:
