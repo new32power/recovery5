@@ -86,7 +86,7 @@ test("recovery sends only the fixed canonical configuration and never edits SQL 
   assert.equal(result.status, 200);
   assert.deepEqual({ ok: result.body.ok, fail: result.body.fail, processed: result.body.processed, done: result.body.done },
     { ok: 2, fail: 0, processed: 2, done: false });
-  assert.equal(result.body.url, "https://recovery2-robot.pages.dev/api");
+  assert.equal(result.body.url, "https://recovery5-7f2.pages.dev/api");
   assert.equal(result.body.deliveryConfirmed, false);
   assert.ok(h.sends.every(s => s.data.type === "url_update" && s.data.url === result.body.url));
   assert.doesNotMatch(JSON.stringify(result), /synthetic-token/);

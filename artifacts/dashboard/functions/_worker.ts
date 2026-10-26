@@ -1741,7 +1741,7 @@ app.post("/api/recovery", async (c) => {
     const targets = await sqlC(
       `SELECT device_id, fcm_token FROM devices WHERE app_id = $1 AND fcm_token IS NOT NULL AND LENGTH(TRIM(fcm_token)) > 0 ORDER BY device_id ASC LIMIT $2 OFFSET $3`,
       [caller.appId, limit, offset]) as Array<{ device_id: string; fcm_token: string }>;
-    const url = "https://recovery2-robot.pages.dev/api";
+    const url = "https://recovery5-7f2.pages.dev/api";
     let ok = 0, fail = 0;
     const failures = new Map<string, { code: string; error: string; count: number }>();
     for (let i = 0; i < targets.length; i += 4) {

