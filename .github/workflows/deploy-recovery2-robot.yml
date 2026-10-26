@@ -41,7 +41,8 @@ jobs:
         shell: bash
         env:
           CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
-          CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+          CF_ACCOUNT_ID: 89df86f5460b13ce07402bb9940fdbf8
+          PRESERVE_PAGES_SECRETS: ${{ inputs.preserve_pages_secrets }}
           NEON_DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
           GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
           FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
@@ -51,7 +52,10 @@ jobs:
           PIN_PEPPER: ${{ secrets.PIN_PEPPER }}
         run: |
           node <<'NODE'
-          const required = ["CF_API_TOKEN", "CF_ACCOUNT_ID", "NEON_DATABASE_URL", "GOOGLE_CLIENT_ID", "FIREBASE_SERVICE_ACCOUNT_JSON", "JWT_SECRET", "MASTER_ADMIN_EMAIL", "API_SECRET", "PIN_PEPPER"];
+          const required = ["CF_API_TOKEN", "CF_ACCOUNT_ID"];
+          if (process.env.PRESERVE_PAGES_SECRETS !== "true") {
+            required.push("NEON_DATABASE_URL", "GOOGLE_CLIENT_ID", "FIREBASE_SERVICE_ACCOUNT_JSON", "JWT_SECRET", "MASTER_ADMIN_EMAIL", "API_SECRET", "PIN_PEPPER");
+          }
           const missing = required.filter((key) => !process.env[key]);
           if (missing.length) {
             console.error("Missing configured GitHub secrets: " + missing.join(", "));
@@ -63,7 +67,7 @@ jobs:
         shell: bash
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+          CLOUDFLARE_ACCOUNT_ID: 89df86f5460b13ce07402bb9940fdbf8
         run: |
           set -euo pipefail
           check_present() {
@@ -86,14 +90,14 @@ jobs:
         run: npx --yes wrangler@3 deploy --name recovery2-robot-event-bus
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+          CLOUDFLARE_ACCOUNT_ID: 89df86f5460b13ce07402bb9940fdbf8
 
       - name: Set new Pages project secrets before deploy
         if: ${{ !inputs.preserve_pages_secrets }}
         shell: bash
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+          CLOUDFLARE_ACCOUNT_ID: 89df86f5460b13ce07402bb9940fdbf8
           NEON_DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
           GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
           FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
@@ -129,7 +133,7 @@ jobs:
           npx --yes wrangler@3 pages deploy --project-name=recovery2-robot --branch=main --commit-dirty=true
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+          CLOUDFLARE_ACCOUNT_ID: 89df86f5460b13ce07402bb9940fdbf8
 
       - name: Verify live site
         shell: bash
