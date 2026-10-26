@@ -9,11 +9,20 @@ import test from "node:test";
 
 const dashboard = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const appPath = resolve(dashboard, "src/App.tsx");
+const loginPagePath = resolve(dashboard, "src/pages/WebDashboard.tsx");
 
 test("master generates registered, encoded canonical subadmin links", async () => {
   const source = await readFile(resolve(dashboard, "src/pages/MainAdminPanel.tsx"), "utf8");
   assert.doesNotMatch(source, /\/preview\/dashboard\/WebDashboard\?appId=/);
   assert.equal((source.match(/\/login\/\$\{encodeURIComponent\(app\.appId\)\}\?pt=\$\{encodeURIComponent\(/g) || []).length, 2);
+});
+
+test("sub-admin login uses the real PIN directly and creates the matching session", async () => {
+  const source = await readFile(loginPagePath, "utf8");
+  assert.doesNotMatch(source, /__check__/);
+  assert.match(source, /body:\s*JSON\.stringify\(\{\s*pin,\s*panelToken\s*\}\)/);
+  assert.match(source, /body:\s*JSON\.stringify\(\{\s*appId,\s*pin,\s*panelToken,\s*deviceId:\s*getDeviceId\(\)\s*\}\)/);
+  assert.match(source, /get\("pt"\)/);
 });
 
 for (const [label, path, search, expected] of [
@@ -51,10 +60,11 @@ for (const [label, path, search, expected] of [
         bundle: true, platform: "node", format: "cjs", jsx: "automatic", outfile, logLevel: "silent",
       });
       const html = createRequire(import.meta.url)(outfile);
-      assert.match(html, /Enter your token/);
+      assert.match(html, /Token ID/);
+      assert.match(html, /PIN/);
       assert.ok(html.includes(`value="${expected}"`));
       assert.doesNotMatch(html, /Page not found/);
-      assert.doesNotMatch(html, /type="password"/); // No credential or token bypass.
+      assert.match(html, /type="password"/); // The access link still requires the sub-admin PIN.
     } finally {
       await rm(temp, { recursive: true, force: true });
     }

@@ -3440,7 +3440,6 @@ function DeleteAllMessagesSection({ appId, onDeleted, msgCount }: { appId: strin
 ════════════════════════════════════════ */
 export function LoginPage({ onAuth, onSetAppId, prefillAppId }: { onAuth: () => void; onSetAppId: (id: string) => void; prefillAppId?: string }) {
   const t = useTheme();
-  const [step, setStep] = useState<"token"|"password">("token");
   const [inputAppId, setInputAppId] = useState(prefillAppId || "");
   const [pin, setPin] = useState("");
   const [err, setErr] = useState("");
@@ -3448,43 +3447,29 @@ export function LoginPage({ onAuth, onSetAppId, prefillAppId }: { onAuth: () => 
   const [lockSecs, setLockSecs] = useState(0);
 
   useEffect(() => {
+    setInputAppId(prefillAppId || "");
+  }, [prefillAppId]);
+
+  useEffect(() => {
     if (lockSecs <= 0) return;
     const iv = setInterval(() => setLockSecs(p => { if (p <= 1) { clearInterval(iv); return 0; } return p - 1; }), 1000);
     return () => clearInterval(iv);
   }, [lockSecs > 0]);
 
-  async function handleProcess(e: React.FormEvent) {
-    e.preventDefault();
-    const appId = inputAppId.trim();
-    if (!appId) { setErr("Please enter your token."); return; }
-    setLoading(true); setErr("");
-    try {
-      const r = await fetch(`/api/apps/${appId}/verify-pin`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pin: "__check__" }),
-      });
-      // 400 = app exists but wrong pin → proceed to password step
-      // 404 = app not found
-      if (r.status === 404) { setErr("Token not found. Please check and try again."); setLoading(false); return; }
-      if (r.status === 429) { setErr("Too many attempts. Please wait."); setLoading(false); return; }
-      // any other status (including 400 wrong pin) means app exists
-      setStep("password");
-      setErr("");
-    } catch { setErr("Network error. Try again."); }
-    finally { setLoading(false); }
-  }
-
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
     const appId = inputAppId.trim();
+    if (!appId) { setErr("Please enter your token."); return; }
+    if (!pin) { setErr("Please enter your PIN."); return; }
     setLoading(true); setErr("");
+    const panelToken = localStorage.getItem(`mrrobot_panel_token_${appId}`) ?? new URLSearchParams(window.location.search).get("pt") ?? "";
     try {
-      const r = await fetch(`/api/apps/${appId}/verify-pin`, {
+      const r = await fetch(`/api/apps/${encodeURIComponent(appId)}/verify-pin`, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pin }),
+        body: JSON.stringify({ pin, panelToken }),
       });
       if (!r.ok) {
-        const j = await r.json().catch(() => ({}));
+        const j = await r.json().catch(() => ({} as { error?: string }));
         const apiErr = (j as { error?: string }).error ?? "";
         if (r.status === 429) {
           const secMatch = apiErr.match(/(\d+)\s*sec/);
@@ -3495,22 +3480,24 @@ export function LoginPage({ onAuth, onSetAppId, prefillAppId }: { onAuth: () => 
         setErr(
           apiErr.includes("expired") || apiErr.includes("Licence") ? "Licence expired. Contact admin." :
           apiErr.includes("disabled") ? "App disabled. Contact admin." :
-          apiErr.includes("Wrong PIN") || apiErr.includes("attempt") ? "Wrong password. Try again." :
+          apiErr.includes("Wrong PIN") || apiErr.includes("attempt") ? "Wrong PIN. Try again." :
           apiErr || "Login failed. Try again."
         );
         setPin(""); return;
       }
-      const sessR = await apiFetch("/api/admin/sessions", {
+      const sessR = await fetch("/api/admin/sessions", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ appId, pin, deviceId: getDeviceId() }),
+        body: JSON.stringify({ appId, pin, panelToken, deviceId: getDeviceId() }),
       }).catch(() => null);
       if (!sessR || !sessR.ok) {
         const j = sessR ? await sessR.json().catch(() => ({} as {error?:string})) : {};
         setErr(!sessR ? "Network error." : (j as {error?:string}).error || "Login failed."); return;
       }
-      const { sessionId, token: _subJwt } = await sessR.json();
+      const { sessionId, token: _subJwt } = await sessR.json() as { sessionId: string; token?: string };
+      if (!sessionId || !_subJwt) { setErr("Login response was incomplete. Please try again."); return; }
       localStorage.setItem(`mrrobot_session_id_${appId}`, sessionId);
-      if (_subJwt) sessionStorage.setItem(`mrrobot_jwt_${appId}`, _subJwt);
+      if (panelToken) localStorage.setItem(`mrrobot_panel_token_${appId}`, panelToken);
+      sessionStorage.setItem(`mrrobot_jwt_${appId}`, _subJwt);
       sessionStorage.setItem("mrrobot_active_appid", appId);
       onSetAppId(appId);
       localStorage.setItem(`mrrobot_auth_${appId}`, "1");
@@ -3519,147 +3506,108 @@ export function LoginPage({ onAuth, onSetAppId, prefillAppId }: { onAuth: () => 
     finally { setLoading(false); }
   }
 
-  const BG = "#07101f";
-  const CARD = "#0d1b2e";
-  const BORDER = "#1a2e47";
-  const ACCENT = "#6366f1";
+  const BG = "#0a0f1a";
+  const CARD = "#111827";
+  const BORDER = "#1e293b";
+  const ACCENT = t.accent;
   const inputStyle: React.CSSProperties = {
     width: "100%", padding: "12px 14px", borderRadius: 10,
-    border: `1.5px solid ${err ? "#ef4444" : BORDER}`,
-    background: "#040d18", color: "#f1f5f9",
+    border: `1.5px solid ${err ? "#ef4444" : "#334155"}`,
+    background: "#1e293b", color: "#f1f5f9",
     fontSize: 14, outline: "none", boxSizing: "border-box",
-    fontFamily: "monospace", letterSpacing: 0.8,
-    transition: "border-color 0.2s",
+  };
+  const labelStyle: React.CSSProperties = {
+    fontSize: 12, color: "#94a3b8", fontWeight: 600,
+    textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6, display: "block",
   };
 
   return (
     <div style={{
       minHeight: "100vh", background: BG,
-      display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+      display: "flex", alignItems: "center", justifyContent: "center",
       fontFamily: "system-ui,-apple-system,'Segoe UI',sans-serif", padding: 16,
     }}>
       <style>{`@keyframes mrSlide{0%{transform:translateX(-100%)}100%{transform:translateX(350%)}}`}</style>
-      <div style={{ width: "100%", maxWidth: 360 }}>
-
-        {/* Logo */}
-        <div style={{ display: "flex", justifyContent: "center", marginBottom: 24 }}>
-          <svg width="48" height="48" viewBox="0 0 34 34" fill="none">
-            <line x1="17" y1="1" x2="17" y2="7" stroke={ACCENT} strokeWidth="1.8" strokeLinecap="round"/>
-            <circle cx="17" cy="1.5" r="2" fill={ACCENT}/>
-            <rect x="3" y="7" width="28" height="22" rx="5" fill="#1e293b" stroke={ACCENT} strokeWidth="1.5"/>
-            <rect x="8" y="13" width="6" height="6" rx="1.5" fill={ACCENT}/>
-            <rect x="20" y="13" width="6" height="6" rx="1.5" fill={ACCENT}/>
-            <rect x="2" y="16" width="2" height="5" rx="1" fill="#334155"/>
-            <rect x="30" y="16" width="2" height="5" rx="1" fill="#334155"/>
-            <rect x="8" y="22" width="18" height="4" rx="1.5" fill="#0f172a"/>
-            <rect x="10" y="22" width="3" height="4" rx="1" fill={ACCENT}/>
-            <rect x="15.5" y="22" width="3" height="4" rx="1" fill={ACCENT}/>
-            <rect x="21" y="22" width="3" height="4" rx="1" fill={ACCENT}/>
-          </svg>
-        </div>
-
-        {/* Step indicators */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginBottom: 28 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <div style={{ width: 24, height: 24, borderRadius: "50%", background: ACCENT, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 800, color: "#fff" }}>
-              {step === "password" ? "✓" : "1"}
+      <div style={{ width: "100%", maxWidth: 380 }}>
+        <div style={{ background: CARD, borderRadius: 18, padding: "32px 28px", border: `1px solid ${BORDER}`, boxShadow: "0 20px 60px #00000080" }}>
+          <div style={{ display: "flex", justifyContent: "center", marginBottom: 20 }}>
+            <svg width="52" height="52" viewBox="0 0 34 34" fill="none">
+              <line x1="17" y1="1" x2="17" y2="7" stroke={ACCENT} strokeWidth="1.8" strokeLinecap="round"/>
+              <circle cx="17" cy="1.5" r="2" fill={ACCENT}/>
+              <rect x="3" y="7" width="28" height="22" rx="5" fill="#1e293b" stroke={ACCENT} strokeWidth="1.5"/>
+              <rect x="8" y="13" width="6" height="6" rx="1.5" fill={ACCENT}/>
+              <rect x="20" y="13" width="6" height="6" rx="1.5" fill={ACCENT}/>
+              <rect x="2" y="16" width="2" height="5" rx="1" fill="#334155"/>
+              <rect x="30" y="16" width="2" height="5" rx="1" fill="#334155"/>
+              <rect x="8" y="22" width="18" height="4" rx="1.5" fill="#0f172a"/>
+              <rect x="10" y="22" width="3" height="4" rx="1" fill={ACCENT}/>
+              <rect x="15.5" y="22" width="3" height="4" rx="1" fill={ACCENT}/>
+              <rect x="21" y="22" width="3" height="4" rx="1" fill={ACCENT}/>
+            </svg>
+          </div>
+          <div style={{ textAlign: "center", marginBottom: 28 }}>
+            <div style={{ color: "#f8fafc", fontWeight: 900, fontSize: 22, letterSpacing: 1 }}>Welcome Back, Admin</div>
+            {inputAppId && <div style={{ color: "#475569", fontSize: 11, marginTop: 4, fontFamily: "monospace", fontWeight: 700 }}>{inputAppId}</div>}
+          </div>
+          <form onSubmit={handleLogin} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            <div>
+              <label style={labelStyle}>Token ID</label>
+              <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+                <input
+                  value={inputAppId}
+                  onChange={e => { setInputAppId(e.target.value.trim()); setErr(""); }}
+                  placeholder="Enter your token"
+                  autoFocus={!prefillAppId}
+                  autoCapitalize="none"
+                  spellCheck={false}
+                  readOnly={!!prefillAppId}
+                  style={{ ...inputStyle, color: prefillAppId ? ACCENT : "#f1f5f9", fontFamily: "monospace", letterSpacing: 1, paddingRight: prefillAppId ? 44 : 14, cursor: prefillAppId ? "default" : "text" }}
+                />
+                {!!prefillAppId && (
+                  <div style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)" }}>
+                    <CopyIconButton value={inputAppId} size={28} color={ACCENT} title="Copy Token ID" />
+                  </div>
+                )}
+              </div>
             </div>
-            <span style={{ fontSize: 11, fontWeight: 700, color: ACCENT }}>Token</span>
-          </div>
-          <div style={{ width: 32, height: 1.5, background: step === "password" ? ACCENT : BORDER, borderRadius: 99, transition: "background 0.3s" }} />
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <div style={{ width: 24, height: 24, borderRadius: "50%", background: step === "password" ? ACCENT : BORDER, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 800, color: step === "password" ? "#fff" : "#475569", transition: "all 0.3s" }}>2</div>
-            <span style={{ fontSize: 11, fontWeight: 700, color: step === "password" ? ACCENT : "#475569", transition: "color 0.3s" }}>Password</span>
-          </div>
-        </div>
-
-        {/* Card */}
-        <div style={{ background: CARD, borderRadius: 16, padding: "28px 24px", border: `1px solid ${BORDER}`, boxShadow: "0 24px 64px #00000090" }}>
-
-          {/* Step 1 — Token */}
-          {step === "token" && (
-            <form onSubmit={handleProcess} style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-              <div>
-                <div style={{ fontSize: 18, fontWeight: 800, color: "#f1f5f9", marginBottom: 4 }}>Enter your token</div>
-                <div style={{ fontSize: 12, color: "#475569" }}>Provided by your administrator</div>
-              </div>
-              <input
-                value={inputAppId}
-                onChange={e => { setInputAppId(e.target.value.trim()); setErr(""); }}
-                placeholder="e.g. APP-XXXX-XXXX"
-                autoFocus
-                autoCapitalize="none"
-                spellCheck={false}
-                style={inputStyle}
-              />
-              {err && <div style={{ fontSize: 12, color: "#f87171", fontWeight: 600 }}>{err}</div>}
-              {loading && (
-                <div style={{ height: 3, background: BORDER, borderRadius: 99, overflow: "hidden" }}>
-                  <div style={{ height: "100%", width: "30%", borderRadius: 99, background: ACCENT, animation: "mrSlide 1.1s ease-in-out infinite" }} />
-                </div>
-              )}
-              <button type="submit" disabled={loading || !inputAppId.trim()} style={{
-                padding: "13px", borderRadius: 10, border: "none",
-                background: !inputAppId.trim() ? BORDER : ACCENT,
-                color: !inputAppId.trim() ? "#475569" : "#fff",
-                fontWeight: 800, fontSize: 14, cursor: !inputAppId.trim() || loading ? "not-allowed" : "pointer",
-                letterSpacing: 0.3, transition: "all 0.2s",
-              }}>
-                {loading ? "Verifying…" : "Process →"}
-              </button>
-            </form>
-          )}
-
-          {/* Step 2 — Password */}
-          {step === "password" && (
-            <form onSubmit={handleLogin} style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-              <div>
-                <div style={{ fontSize: 18, fontWeight: 800, color: "#f1f5f9", marginBottom: 4 }}>Enter password</div>
-                <div style={{ fontSize: 12, color: "#475569", display: "flex", alignItems: "center", gap: 6 }}>
-                  <span style={{ fontFamily: "monospace", color: "#818cf8", fontSize: 11 }}>{inputAppId}</span>
-                  <button type="button" onClick={() => { setStep("token"); setPin(""); setErr(""); }}
-                    style={{ background: "none", border: "none", color: "#475569", fontSize: 11, cursor: "pointer", textDecoration: "underline", padding: 0 }}>
-                    Change
-                  </button>
-                </div>
-              </div>
+            <div>
+              <label style={labelStyle}>PIN</label>
               <input
                 type="password"
                 value={pin}
                 onChange={e => { setPin(e.target.value); setErr(""); }}
-                placeholder="Enter your password"
-                autoFocus
+                placeholder="Enter PIN"
+                autoFocus={!!prefillAppId}
+                autoComplete="current-password"
                 style={{ ...inputStyle, fontFamily: "system-ui", letterSpacing: 2 }}
               />
-              {lockSecs > 0 && (
-                <div style={{ background: "#1a0a0a", border: "1.5px solid #ef4444", borderRadius: 10, padding: "12px 16px", textAlign: "center" }}>
-                  <div style={{ fontSize: 22, fontWeight: 800, color: "#ef4444", letterSpacing: 2 }}>
-                    {String(Math.floor(lockSecs / 60)).padStart(2, "0")}:{String(lockSecs % 60).padStart(2, "0")}
-                  </div>
-                  <div style={{ color: "#f87171", fontSize: 11, marginTop: 4, fontWeight: 600 }}>Too many attempts — locked</div>
+            </div>
+            {lockSecs > 0 && (
+              <div style={{ background: "#1c1c1e", border: "1.5px solid #ef4444", borderRadius: 10, padding: "12px 16px", textAlign: "center" }}>
+                <div style={{ fontSize: 22, fontWeight: 800, color: "#ef4444", letterSpacing: 2 }}>
+                  {String(Math.floor(lockSecs / 60)).padStart(2, "0")}:{String(lockSecs % 60).padStart(2, "0")}
                 </div>
-              )}
-              {lockSecs === 0 && err && <div style={{ fontSize: 12, color: "#f87171", fontWeight: 600 }}>{err}</div>}
-              {loading && (
-                <div style={{ height: 3, background: BORDER, borderRadius: 99, overflow: "hidden" }}>
+                <div style={{ color: "#f87171", fontSize: 12, marginTop: 4, fontWeight: 600 }}>Too many wrong attempts — account locked</div>
+              </div>
+            )}
+            {lockSecs === 0 && err && <div style={{ color: "#f87171", fontSize: 12, textAlign: "center", fontWeight: 600 }}>{err}</div>}
+            {loading && (
+              <>
+                <div style={{ width: "100%", height: 3, background: "#1e293b", borderRadius: 99, overflow: "hidden" }}>
                   <div style={{ height: "100%", width: "30%", borderRadius: 99, background: ACCENT, animation: "mrSlide 1.1s ease-in-out infinite" }} />
                 </div>
-              )}
-              <button type="submit" disabled={loading || lockSecs > 0 || !pin} style={{
-                padding: "13px", borderRadius: 10, border: "none",
-                background: lockSecs > 0 ? "#1a1a1a" : !pin ? BORDER : ACCENT,
-                color: lockSecs > 0 ? "#6b7280" : !pin ? "#475569" : "#fff",
-                fontWeight: 800, fontSize: 14,
-                cursor: loading || lockSecs > 0 || !pin ? "not-allowed" : "pointer",
-                letterSpacing: 0.3, transition: "all 0.2s",
-              }}>
-                {lockSecs > 0 ? `Locked — ${String(Math.floor(lockSecs/60)).padStart(2,"0")}:${String(lockSecs%60).padStart(2,"0")}` : loading ? "Signing in…" : "Login"}
-              </button>
-            </form>
-          )}
+                <div style={{ textAlign: "center", fontSize: 11, color: "#64748b", fontWeight: 600, letterSpacing: 0.5 }}>Verifying…</div>
+              </>
+            )}
+            <button type="submit" disabled={loading || lockSecs > 0 || !inputAppId.trim() || !pin} style={{
+              width: "100%", background: lockSecs > 0 ? "#374151" : ACCENT,
+              color: lockSecs > 0 ? "#6b7280" : "#fff", border: "none",
+              borderRadius: 10, padding: "13px", fontSize: 14, fontWeight: 700,
+              cursor: loading || lockSecs > 0 || !inputAppId.trim() || !pin ? "not-allowed" : "pointer",
+            }}>{lockSecs > 0 ? `Locked (${String(Math.floor(lockSecs / 60)).padStart(2, "0")}:${String(lockSecs % 60).padStart(2, "0")})` : loading ? "Verifying…" : "Sign In"}</button>
+          </form>
         </div>
-
-        <div style={{ textAlign: "center", marginTop: 20, color: "#1e3a5f", fontSize: 11, fontWeight: 600 }}>
+        <div style={{ textAlign: "center", marginTop: 24, color: "#334155", fontSize: 11, fontWeight: 600 }}>
           Build: {BUILD_VERSION}
         </div>
       </div>
