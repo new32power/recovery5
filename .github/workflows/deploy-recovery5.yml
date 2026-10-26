@@ -31,6 +31,9 @@ jobs:
 
       - run: pnpm install --no-frozen-lockfile
 
+      - name: Test password login
+        run: node --test artifacts/dashboard/tests/master-password-login.test.mjs
+
       - name: Build dashboard
         run: pnpm --filter @workspace/dashboard run build
         env:
@@ -42,16 +45,14 @@ jobs:
         env:
           CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
           CF_ACCOUNT_ID: 89df86f5460b13ce07402bb9940fdbf8
-          NEON_DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
-          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          NEON_DATABASE_URL: ${{ secrets.NEON_DATABASE_URL || secrets.NEON_DATABASE_UR }}
           FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
-          MASTER_ADMIN_EMAIL: ${{ secrets.MASTER_ADMIN_EMAIL }}
           API_SECRET: ${{ secrets.API_SECRET }}
           PIN_PEPPER: ${{ secrets.PIN_PEPPER }}
         run: |
           node <<'NODE'
-          const required = ["CF_API_TOKEN", "CF_ACCOUNT_ID", "NEON_DATABASE_URL", "GOOGLE_CLIENT_ID", "FIREBASE_SERVICE_ACCOUNT_JSON", "JWT_SECRET", "MASTER_ADMIN_EMAIL", "API_SECRET", "PIN_PEPPER"];
+          const required = ["CF_API_TOKEN", "CF_ACCOUNT_ID", "NEON_DATABASE_URL", "FIREBASE_SERVICE_ACCOUNT_JSON", "JWT_SECRET", "API_SECRET", "PIN_PEPPER"];
           const missing = required.filter((key) => !process.env[key]);
           if (missing.length) {
             console.error("Missing configured GitHub secrets: " + missing.join(", "));
@@ -93,11 +94,9 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: 89df86f5460b13ce07402bb9940fdbf8
-          NEON_DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
-          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          NEON_DATABASE_URL: ${{ secrets.NEON_DATABASE_URL || secrets.NEON_DATABASE_UR }}
           FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
-          MASTER_ADMIN_EMAIL: ${{ secrets.MASTER_ADMIN_EMAIL }}
           API_SECRET: ${{ secrets.API_SECRET }}
           PIN_PEPPER: ${{ secrets.PIN_PEPPER }}
         run: |
@@ -105,7 +104,7 @@ jobs:
           umask 077
           node <<'NODE'
           const fs = require("node:fs");
-          const keys = ["NEON_DATABASE_URL", "GOOGLE_CLIENT_ID", "FIREBASE_SERVICE_ACCOUNT_JSON", "JWT_SECRET", "MASTER_ADMIN_EMAIL", "API_SECRET", "PIN_PEPPER"];
+          const keys = ["NEON_DATABASE_URL", "FIREBASE_SERVICE_ACCOUNT_JSON", "JWT_SECRET", "API_SECRET", "PIN_PEPPER"];
           const values = Object.fromEntries(keys.map((key) => [key, process.env[key]]));
           const missing = keys.filter((key) => !values[key]);
           if (missing.length) {
