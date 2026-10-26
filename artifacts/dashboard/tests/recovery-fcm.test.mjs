@@ -41,9 +41,9 @@ function harness({ active = true, configured = true, rejected = {}, dbError = fa
     sub: "synthetic-session", appId: "SYNTHETIC-APP", role: "sub-admin", iss: "mr-panel",
     exp: Math.floor(Date.now() / 1000) + 600, ...extra,
   }, "synthetic-jwt-secret");
-  const invoke = (body, authorization = "", path = "/api/recovery", jwt = "synthetic-jwt-secret") => routes.get(path)({
+  const invoke = (body, authorization = "", path = "/api/recovery", jwt = "synthetic-jwt-secret", origin = "https://recovery2-robot.pages.dev") => routes.get(path)({
     env: { JWT_SECRET: jwt, NEON_DATABASE_URL: "not-a-real-database" },
-    req: { header: () => authorization, json: async () => body },
+    req: { url: new URL(path, origin).toString(), header: () => authorization, json: async () => body },
     json: (body, status = 200) => ({ status, body }),
   });
   return { ...api, token, invoke, queries, sends };
@@ -80,16 +80,28 @@ test("batch pagination is bounded and rejects invalid values", async () => {
     assert.equal(h.sends.length, 0);
   }
 });
-test("recovery sends only the fixed canonical configuration and never edits SQL data", async () => {
+test("recovery sends this deployment's API URL and never edits SQL data", async () => {
   const h = harness();
   const result = await h.invoke({ offset: 0, limit: 2 }, "Bearer " + await h.token());
   assert.equal(result.status, 200);
   assert.deepEqual({ ok: result.body.ok, fail: result.body.fail, processed: result.body.processed, done: result.body.done },
     { ok: 2, fail: 0, processed: 2, done: false });
-  assert.equal(result.body.url, "https://recovery5-7f2.pages.dev/api");
+  assert.equal(result.body.url, "https://recovery2-robot.pages.dev/api");
   assert.equal(result.body.deliveryConfirmed, false);
   assert.ok(h.sends.every(s => s.data.type === "url_update" && s.data.url === result.body.url));
   assert.doesNotMatch(JSON.stringify(result), /synthetic-token/);
+});
+test("recovery URL follows the active Pages deployment", async () => {
+  for (const [origin, expected] of [
+    ["https://recovery2-robot.pages.dev", "https://recovery2-robot.pages.dev/api"],
+    ["https://recovery5-7f2.pages.dev", "https://recovery5-7f2.pages.dev/api"],
+  ]) {
+    const h = harness();
+    const result = await h.invoke({}, "Bearer " + await h.token(), "/api/recovery", undefined, origin);
+    assert.equal(result.status, 200);
+    assert.equal(result.body.url, expected);
+    assert.ok(h.sends.every(s => s.data.url === expected));
+  }
 });
 test("provider-rejected registrations are counted as failures, not recovered devices", async () => {
   const h = harness({ rejected: { "synthetic-token-2": providerError(404, "UNREGISTERED") } });

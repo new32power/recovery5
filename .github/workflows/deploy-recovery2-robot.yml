@@ -36,6 +36,9 @@ jobs:
 
       - run: pnpm install --no-frozen-lockfile
 
+      - name: Test deployment-specific API URL
+        run: node --test artifacts/dashboard/tests/recovery-fcm.test.mjs
+
       - name: Build dashboard
         run: pnpm --filter @workspace/dashboard run build
         env:
